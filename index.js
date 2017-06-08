@@ -159,7 +159,6 @@ module.exports = pify(function packager (opts, cb) {
 
     debug(`Application name: ${opts.name}`)
     debug(`Target Electron version: ${opts.electronVersion}`)
-
     ignore.generateIgnores(opts)
 
     series(createSeries(opts, archs, platforms), function (err, appPaths) {

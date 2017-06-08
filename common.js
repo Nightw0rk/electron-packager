@@ -9,6 +9,7 @@ const minimist = require('minimist')
 const os = require('os')
 const path = require('path')
 const pruneModules = require('./prune').pruneModules
+const rebuildModules = require('./rebuild').rebuildModules
 const sanitize = require('sanitize-filename')
 const semver = require('semver')
 const series = require('run-series')
@@ -16,7 +17,7 @@ const series = require('run-series')
 const archs = ['ia32', 'x64', 'armv7l']
 const platforms = ['darwin', 'linux', 'mas', 'win32']
 
-function parseCLIArgs (argv) {
+function parseCLIArgs(argv) {
   var args = minimist(argv, {
     boolean: [
       'all',
@@ -24,12 +25,14 @@ function parseCLIArgs (argv) {
       'download.strictSSL',
       'overwrite',
       'prune',
+      'rebuild',
       'quiet'
     ],
     default: {
       'deref-symlinks': true,
       'download.strictSSL': true,
-      prune: true
+      prune: true,
+      rebuild: false
     },
     string: [
       'electron-version',
@@ -48,7 +51,7 @@ function parseCLIArgs (argv) {
 
   if (protocolSchemes && protocolNames && protocolNames.length === protocolSchemes.length) {
     args.protocols = protocolSchemes.map(function (scheme, i) {
-      return {schemes: [scheme], name: protocolNames[i]}
+      return { schemes: [scheme], name: protocolNames[i] }
     })
   }
 
@@ -76,7 +79,7 @@ function parseCLIArgs (argv) {
   return args
 }
 
-function asarApp (appPath, asarOptions, cb) {
+function asarApp(appPath, asarOptions, cb) {
   var dest = path.join(appPath, '..', 'app.asar')
   debug(`Running asar with the options ${JSON.stringify(asarOptions)}`)
   asar.createPackageWithOptions(appPath, dest, asarOptions, function (err) {
@@ -88,46 +91,46 @@ function asarApp (appPath, asarOptions, cb) {
   })
 }
 
-function isPlatformMac (platform) {
+function isPlatformMac(platform) {
   return platform === 'darwin' || platform === 'mas'
 }
 
-function sanitizeAppName (name) {
-  return sanitize(name, {replacement: '-'})
+function sanitizeAppName(name) {
+  return sanitize(name, { replacement: '-' })
 }
 
-function generateFinalBasename (opts) {
+function generateFinalBasename(opts) {
   return `${sanitizeAppName(opts.name)}-${opts.platform}-${opts.arch}`
 }
 
-function generateFinalPath (opts) {
+function generateFinalPath(opts) {
   return path.join(opts.out || process.cwd(), generateFinalBasename(opts))
 }
 
-function info (message, quiet) {
+function info(message, quiet) {
   if (!quiet) {
     console.error(message)
   }
 }
 
-function warning (message, quiet) {
+function warning(message, quiet) {
   if (!quiet) {
     console.warn(`WARNING: ${message}`)
   }
 }
 
-function subOptionWarning (properties, optionName, parameter, value, quiet) {
+function subOptionWarning(properties, optionName, parameter, value, quiet) {
   if (properties.hasOwnProperty(parameter)) {
     warning(`${optionName}.${parameter} will be inferred from the main options`, quiet)
   }
   properties[parameter] = value
 }
 
-function baseTempDir (opts) {
+function baseTempDir(opts) {
   return path.join(opts.tmpdir || os.tmpdir(), 'electron-packager')
 }
 
-function createAsarOpts (opts) {
+function createAsarOpts(opts) {
   let asarOptions
   if (opts.asar === true) {
     asarOptions = {}
@@ -143,7 +146,7 @@ function createAsarOpts (opts) {
   return asarOptions
 }
 
-function createDownloadOpts (opts, platform, arch) {
+function createDownloadOpts(opts, platform, arch) {
   let downloadOpts = Object.assign({}, opts.download)
 
   subOptionWarning(downloadOpts, 'download', 'platform', platform, opts.quiet)
@@ -167,7 +170,7 @@ module.exports = {
 
   createAsarOpts: createAsarOpts,
   createDownloadOpts: createDownloadOpts,
-  createDownloadCombos: function createDownloadCombos (opts, selectedPlatforms, selectedArchs, ignoreFunc) {
+  createDownloadCombos: function createDownloadCombos(opts, selectedPlatforms, selectedArchs, ignoreFunc) {
     let combinations = []
     for (let arch of selectedArchs) {
       for (let platform of selectedPlatforms) {
@@ -183,7 +186,7 @@ module.exports = {
     return combinations
   },
 
-  deprecatedParameter: function deprecatedParameter (properties, oldName, newName, newCLIName) {
+  deprecatedParameter: function deprecatedParameter(properties, oldName, newName, newCLIName) {
     if (properties.hasOwnProperty(oldName)) {
       warning(`The ${oldName} parameter is deprecated, use ${newName} (or --${newCLIName} in the CLI) instead`)
       if (!properties.hasOwnProperty(newName)) {
@@ -208,7 +211,7 @@ module.exports = {
     'protocol-name': 'protocolName'
   },
 
-  camelCase: function camelCase (properties, warn) {
+  camelCase: function camelCase(properties, warn) {
     Object.keys(module.exports.kebabProperties).forEach(function (key) {
       var value = module.exports.kebabProperties[key]
       if (properties.hasOwnProperty(key)) {
@@ -223,7 +226,7 @@ module.exports = {
     })
   },
 
-  downloadElectronZip: function downloadElectronZip (downloadOpts, cb) {
+  downloadElectronZip: function downloadElectronZip(downloadOpts, cb) {
     // armv7l builds have only been backfilled for Electron >= 1.0.0.
     // See: https://github.com/electron/electron/pull/6986
     if (downloadOpts.arch === 'armv7l' && semver.lt(downloadOpts.version, '1.0.0')) {
@@ -238,7 +241,7 @@ module.exports = {
 
   info: info,
 
-  initializeApp: function initializeApp (opts, templatePath, appRelativePath, callback) {
+  initializeApp: function initializeApp(opts, templatePath, appRelativePath, callback) {
     // Performs the following initial operations for an app:
     // * Creates temporary directory
     // * Copies template into temporary directory
@@ -261,7 +264,7 @@ module.exports = {
 
     var operations = [
       function (cb) {
-        fs.move(templatePath, tempPath, {clobber: true}, cb)
+        fs.move(templatePath, tempPath, { clobber: true }, cb)
       },
       function (cb) {
         // `deref-symlinks` is the default value so we'll use it unless
@@ -271,7 +274,7 @@ module.exports = {
           shouldDeref = opts.derefSymlinks
         }
 
-        fs.copy(opts.dir, appPath, {filter: ignore.userIgnoreFilter(opts), dereference: shouldDeref}, cb)
+        fs.copy(opts.dir, appPath, { filter: ignore.userIgnoreFilter(opts), dereference: shouldDeref }, cb)
       },
       function (cb) {
         var afterCopyHooks = (opts.afterCopy || []).map(function (afterCopyFn) {
@@ -298,6 +301,12 @@ module.exports = {
       })
     }
 
+    if (opts.rebuild || opts.rebuild !== undefined) {
+      operations.push(function (cb) {
+        rebuildModules(opts, appPath, cb)
+      })
+    }
+
     let asarOptions = createAsarOpts(opts)
     if (asarOptions) {
       operations.push(function (cb) {
@@ -312,7 +321,7 @@ module.exports = {
     })
   },
 
-  moveApp: function finalizeApp (opts, tempPath, callback) {
+  moveApp: function finalizeApp(opts, tempPath, callback) {
     var finalPath = generateFinalPath(opts)
 
     if (opts.tmpdir === false) {
@@ -326,7 +335,7 @@ module.exports = {
     })
   },
 
-  normalizeExt: function normalizeExt (filename, targetExt, cb) {
+  normalizeExt: function normalizeExt(filename, targetExt, cb) {
     // Forces a filename to a given extension and fires the given callback with the normalized filename,
     // if it exists.  Otherwise reports the error from the fs.stat call.
     // (Used for resolving icon filenames, particularly during --all runs.)
@@ -344,7 +353,7 @@ module.exports = {
     })
   },
 
-  rename: function rename (basePath, oldName, newName, cb) {
+  rename: function rename(basePath, oldName, newName, cb) {
     debug(`Renaming ${oldName} to ${newName} in ${basePath}`)
     fs.rename(path.join(basePath, oldName), path.join(basePath, newName), cb)
   },

@@ -5,14 +5,14 @@ const getPackageInfo = require('get-package-info')
 const path = require('path')
 const resolve = require('resolve')
 
-function isMissingRequiredProperty (props) {
+function isMissingRequiredProperty(props) {
   var requiredProps = props.filter(
     (prop) => prop === 'productName' || prop === 'dependencies.electron'
   )
   return requiredProps.length !== 0
 }
 
-function errorMessageForProperty (prop) {
+function errorMessageForProperty(prop) {
   let hash, propDescription
   switch (prop) {
     case 'productName':
@@ -33,7 +33,7 @@ function errorMessageForProperty (prop) {
     `https://github.com/electron-userland/electron-packager/blob/master/docs/api.md#${hash}\n`
 }
 
-function getVersion (opts, electronProp, cb) {
+function getVersion(opts, electronProp, cb) {
   // Destructured assignments are added in Node 6
   const splitProp = electronProp.prop.split('.')
   const depType = splitProp[0]
@@ -61,7 +61,16 @@ function getVersion (opts, electronProp, cb) {
   }
 }
 
-module.exports = function getMetadataFromPackageJSON (opts, dir, cb) {
+function replacer(tpl, data) {
+  let re = /{(.*)}/g, match;
+  while (match = re.exec(tpl)) {
+    tpl = tpl.replace(match[0], data[match[1]])
+    re.lastIndex = 0;
+  }
+  return tpl;
+}
+
+module.exports = function getMetadataFromPackageJSON(opts, dir, cb) {
   let props = []
   if (!opts.name) props.push(['productName', 'name'])
   if (!opts.appVersion) props.push('version')
@@ -75,6 +84,7 @@ module.exports = function getMetadataFromPackageJSON (opts, dir, cb) {
       'devDependencies.electron-prebuilt'
     ])
   }
+  props.push(["electron-packager.env", "env"])
 
   // Name and version provided, no need to infer
   if (props.length === 0) return cb(null)
@@ -99,7 +109,17 @@ module.exports = function getMetadataFromPackageJSON (opts, dir, cb) {
     } else if (err) {
       return cb(err)
     }
-
+    let envs = {}
+    if (result.values.env) {
+      Object.keys(result.values.env).map((key) => {
+        let value = result.values.env[key];
+        if (/\{(.*)\}/.exec(value)) {
+          value = replacer(value, opts);
+        }
+        envs[key] = value;
+      })
+    }
+    opts.env = envs;
     if (result.values.productName) {
       debug(`Inferring application name from ${result.source.productName.prop} in ${result.source.productName.src}`)
       opts.name = result.values.productName

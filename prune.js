@@ -9,7 +9,7 @@ function pruneCommand(packageManager) {
   switch (packageManager) {
     case 'npm':
     case 'cnpm':
-      return `${packageManager} prune --production && ${packageManager} rebuild`
+      return `${packageManager} prune --production`
     case 'yarn':
       return `${packageManager} install --production`
   }
@@ -26,10 +26,7 @@ function pruneModules(opts, appPath, cb) {
 
   if (command) {
     debug(`Pruning modules via: ${command}`)
-    child.exec(command, { cwd: appPath, env: { "WCJS_ARCH": opts.arch, "WCJS_PLATFORM": opts.platform } }, (e, out, err) => {
-      console.log(e, out, err);
-      return cb(e,out,err);
-    })
+    child.exec(command, { cwd: appPath }, cb)
   } else {
     cb(new Error(`Unknown package manager "${packageManager}". Known package managers: ${knownPackageManagers.join(', ')}`))
   }
